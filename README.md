@@ -1,20 +1,23 @@
 # electro_parse
 
-Парсер JPG/PNG з графіками погодинних відключень електропостачання.
+Парсер зображень графіків погодинних відключень електропостачання.
 
-Скрипт шукає основну матрицю розкладу, визначає геометрію сітки, читає кольори клітинок і повертає структуру:
+Скрипт читає зображення таблиці, визначає геометрію сітки, класифікує кольори клітинок і повертає структуру на кшталт:
 
 ```json
 {
-  "1.1": { "off": ["19:00", "20:00"], "maybe_off": [] },
-  "1.2": { "off": [], "maybe_off": [] }
+  "1.1": { "off": ["17:00", "18:00", "19:00", "20:00"], "maybe_off": [] },
+  "1.2": { "off": ["17:00", "18:00", "19:00", "20:00"], "maybe_off": [] }
 }
 ```
 
+За замовчуванням парсер очікує матрицю `12 x 24`: 12 рядків підчерг і 24 погодинні колонки. Для такої конфігурації рядки маркуються як `1.1`, `1.2`, ..., `6.1`, `6.2`.
+
 ## Що вміє
 
-- парсити таблицю `24 x M` з погодинними колонками;
-- працювати з трохи різними стилями таблиці;
+- парсити зображення таблиці з налаштовуваною кількістю рядків і колонок;
+- знаходити сітку як за заповненими клітинками, так і за лініями таблиці;
+- повертати окремо години `off` і `maybe_off`;
 - будувати debug-зображення з накладеною знайденою сіткою;
 - генерувати Markdown-звіт по всіх зображеннях з `images/`.
 
@@ -35,10 +38,18 @@ python -m pip install -r requirements.txt
 python electro_parse.py "images/photo_2026-03-19.jpeg"
 ```
 
+Підтримувані в проєкті формати для вхідних файлів: `.jpg`, `.jpeg`, `.png`.
+
 З debug-накладкою:
 
 ```bash
 python electro_parse.py "images/photo_2026-03-19.jpeg" --debug
+```
+
+У цьому режимі debug-файл буде створено поруч з оригіналом, наприклад:
+
+```text
+images/photo_2026-03-19.debug.jpeg
 ```
 
 Або з явним шляхом для debug-файлу:
@@ -47,18 +58,32 @@ python electro_parse.py "images/photo_2026-03-19.jpeg" --debug
 python electro_parse.py "images/photo_2026-03-19.jpeg" --debug report/assets/photo_2026-03-19.debug.jpeg
 ```
 
+Доступні параметри:
+
+```bash
+python electro_parse.py IMAGE --rows 12 --columns 24 --max-colors 10
+```
+
+Після успішного запуску скрипт друкує JSON у stdout. Якщо увімкнено `--debug`, додатково друкується шлях у форматі `debug_image=...`.
+
 ## Генерація звіту
 
 ```bash
 python generate_report.py
 ```
 
-Результат:
+Скрипт:
 
-- `report/report.md`
-- `report/assets/*.debug.jpeg`
+- бере всі файли `.jpg`, `.jpeg`, `.png` з директорії `images/`;
+- ігнорує приховані файли та вже згенеровані `*.debug.*`;
+- щоразу заново створює `report/assets/`;
+- генерує `report/report.md` з відносними посиланнями на debug-зображення.
 
-У `report.md` зображення вставляються відносними шляхами `assets/...`, тому це коректно працює на GitHub.
+Можна змінити шляхи й параметри парсингу:
+
+```bash
+python generate_report.py --images images --report report --rows 12 --columns 24 --max-colors 10
+```
 
 ## Тести
 
@@ -66,9 +91,13 @@ python generate_report.py
 python -m unittest discover -s tests -v
 ```
 
-## Використання як бібліотеки
+Тести покривають:
 
-Парсер можна імпортувати в інший Python-проєкт:
+- парсинг кількох реальних прикладів з `images/`;
+- створення debug-накладки;
+- генерацію Markdown-звіту з коректними відносними шляхами.
+
+## Використання як бібліотеки
 
 ```python
 from electro_parse import parse_schedule_image
@@ -77,16 +106,21 @@ data = parse_schedule_image("images/photo_2026-03-19.jpeg")
 print(data["1.1"]["off"])
 ```
 
+За потреби можна передати параметри явно:
+
+```python
+from electro_parse import parse_schedule_image
+
+data = parse_schedule_image(
+    "images/photo_2026-03-19.jpeg",
+    row_count=12,
+    column_count=24,
+    max_colors=10,
+    debug_output="report/assets/photo_2026-03-19.debug.jpeg",
+)
+```
+
 ## Приклад інтеграції в чатбот
-
-Сценарій:
-
-1. користувач надсилає боту зображення графіка;
-2. бот зберігає файл тимчасово на диск;
-3. код викликає `parse_schedule_image(...)`;
-4. бот повертає структуровані дані або текстову відповідь.
-
-Мінімальний приклад:
 
 ```python
 from electro_parse import parse_schedule_image
@@ -98,13 +132,9 @@ def handle_uploaded_schedule(image_path: str) -> dict:
         "status": "ok",
         "schedule": parsed,
     }
-
-
-result = handle_uploaded_schedule("/tmp/uploaded-schedule.jpeg")
-print(result)
 ```
 
-Приклад, якщо чатботу треба відповісти по конкретній підчерзі:
+Приклад відповіді по конкретній підчерзі:
 
 ```python
 from electro_parse import parse_schedule_image
@@ -126,8 +156,8 @@ def build_queue_answer(image_path: str, queue: str) -> str:
 
 ## Структура проєкту
 
-- `electro_parse.py` — основний парсер;
+- `electro_parse.py` — основний парсер і CLI;
 - `generate_report.py` — генерація Markdown-звіту і debug-активів;
-- `tests/` — тести;
+- `tests/` — unit-тести;
 - `images/` — приклади вхідних зображень;
-- `report/` — згенерований звіт.
+- `report/` — приклад згенерованого звіту.

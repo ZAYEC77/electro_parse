@@ -20,6 +20,7 @@ class GridGeometry:
 
 
 def quantize_image(image: np.ndarray, max_colors: int = 10) -> np.ndarray:
+    cv2.setRNGSeed(0)
     pixels = image.reshape((-1, 3)).astype(np.float32)
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 20, 1.0)
     _, labels, centers = cv2.kmeans(
