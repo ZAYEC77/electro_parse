@@ -281,9 +281,7 @@ def _sample_cell_colors(image: np.ndarray, geometry: GridGeometry) -> list[list[
 def _draw_debug_overlay(
     image: np.ndarray,
     geometry: GridGeometry,
-    cell_colors: list[list[np.ndarray]],
-    off_colors: set[tuple[int, int, int]],
-    maybe_colors: set[tuple[int, int, int]],
+    statuses: list[list[str]],
     output_path: Path,
 ) -> None:
     debug_image = image.copy()
@@ -317,13 +315,7 @@ def _draw_debug_overlay(
             sample_bottom = top + (row + 1) * geometry.cell_height - y_padding
             cx = (sample_left + sample_right) // 2
             cy = (sample_top + sample_bottom) // 2
-            color = tuple(int(channel) for channel in np.uint8(cell_colors[row][column]).tolist())
-            if color in off_colors:
-                status = "off"
-            elif color in maybe_colors:
-                status = "maybe_off"
-            else:
-                status = "on"
+            status = statuses[row][column]
             cv2.circle(debug_image, (cx, cy), 3, point_colors[status], -1)
 
     if not cv2.imwrite(str(output_path), debug_image):
@@ -363,6 +355,26 @@ def _row_labels(row_count: int) -> list[str]:
     return [f"{row // 2 + 1}.{row % 2 + 1}" for row in range(row_count)]
 
 
+def _classify_cell_statuses(
+    cell_colors: list[list[np.ndarray]],
+    off_colors: set[tuple[int, int, int]],
+    maybe_colors: set[tuple[int, int, int]],
+) -> list[list[str]]:
+    statuses: list[list[str]] = []
+    for row in cell_colors:
+        status_row: list[str] = []
+        for color_value in row:
+            color = tuple(int(channel) for channel in np.uint8(color_value).tolist())
+            if color in off_colors:
+                status_row.append("off")
+            elif color in maybe_colors:
+                status_row.append("maybe_off")
+            else:
+                status_row.append("on")
+        statuses.append(status_row)
+    return statuses
+
+
 def parse_schedule_image(
     image_path: str | Path,
     *,
@@ -379,19 +391,20 @@ def parse_schedule_image(
     geometry = _infer_geometry(image, quantized, row_count=row_count, column_count=column_count)
     cell_colors = _sample_cell_colors(quantized, geometry)
     off_colors, maybe_colors = _classify_palette(cell_colors)
+    statuses = _classify_cell_statuses(cell_colors, off_colors, maybe_colors)
     if debug_output is not None:
-        _draw_debug_overlay(image, geometry, cell_colors, off_colors, maybe_colors, Path(debug_output))
+        _draw_debug_overlay(image, geometry, statuses, Path(debug_output))
 
     result: dict[str, dict[str, list[str]]] = {}
     for row_index, label in enumerate(_row_labels(row_count)):
         off_hours: list[str] = []
         maybe_off_hours: list[str] = []
         for hour in range(column_count):
-            color = tuple(int(channel) for channel in np.uint8(cell_colors[row_index][hour]).tolist())
             hour_label = f"{hour:02d}:00"
-            if color in off_colors:
+            status = statuses[row_index][hour]
+            if status == "off":
                 off_hours.append(hour_label)
-            elif color in maybe_colors:
+            elif status == "maybe_off":
                 maybe_off_hours.append(hour_label)
         result[label] = {"off": off_hours, "maybe_off": maybe_off_hours}
     return result
