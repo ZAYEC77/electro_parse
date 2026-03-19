@@ -286,41 +286,16 @@ def _draw_debug_overlay(
     output_path: Path,
 ) -> None:
     debug_image = image.copy()
-    overlay = debug_image.copy()
     left = geometry.matrix_left
     top = geometry.matrix_top
     right = left + geometry.column_count * geometry.cell_width
     bottom = top + geometry.row_count * geometry.cell_height
 
-    status_colors = {
-        "off": (40, 40, 220),
-        "maybe_off": (0, 200, 255),
-        "on": (60, 180, 75),
+    point_colors = {
+        "off": (0, 0, 255),
+        "maybe_off": (255, 0, 0),
+        "on": (0, 180, 0),
     }
-
-    for row in range(geometry.row_count):
-        for column in range(geometry.column_count):
-            color = tuple(int(channel) for channel in np.uint8(cell_colors[row][column]).tolist())
-            if color in off_colors:
-                status = "off"
-            elif color in maybe_colors:
-                status = "maybe_off"
-            else:
-                status = "on"
-
-            cell_left = left + column * geometry.cell_width
-            cell_right = left + (column + 1) * geometry.cell_width
-            cell_top = top + row * geometry.cell_height
-            cell_bottom = top + (row + 1) * geometry.cell_height
-            cv2.rectangle(
-                overlay,
-                (cell_left, cell_top),
-                (cell_right, cell_bottom),
-                status_colors[status],
-                -1,
-            )
-
-    cv2.addWeighted(overlay, 0.25, debug_image, 0.75, 0, debug_image)
     cv2.rectangle(debug_image, (left, top), (right, bottom), (0, 0, 255), 2)
 
     for column in range(geometry.column_count + 1):
@@ -341,7 +316,14 @@ def _draw_debug_overlay(
             sample_bottom = top + (row + 1) * geometry.cell_height - y_padding
             cx = (sample_left + sample_right) // 2
             cy = (sample_top + sample_bottom) // 2
-            cv2.circle(debug_image, (cx, cy), 2, (0, 255, 0), -1)
+            color = tuple(int(channel) for channel in np.uint8(cell_colors[row][column]).tolist())
+            if color in off_colors:
+                status = "off"
+            elif color in maybe_colors:
+                status = "maybe_off"
+            else:
+                status = "on"
+            cv2.circle(debug_image, (cx, cy), 3, point_colors[status], -1)
 
     if not cv2.imwrite(str(output_path), debug_image):
         raise ValueError(f"Failed to write debug image: {output_path}")
