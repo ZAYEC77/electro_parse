@@ -73,6 +73,7 @@ def generate_report(
     for image_path in images:
         debug_name = f"{image_path.stem}.debug{image_path.suffix.lower()}"
         debug_path = assets_dir / debug_name
+        source_link = image_path.relative_to(image_dir) if image_path.is_relative_to(image_dir) else image_path.name
         parsed = parse_schedule_image(
             image_path,
             row_count=row_count,
@@ -83,7 +84,7 @@ def generate_report(
 
         lines.extend(
             [
-                f"## {image_path.name}",
+                f"## [{image_path.name}](../{image_dir.name}/{source_link.as_posix() if isinstance(source_link, Path) else source_link})",
                 "",
                 f"![{image_path.name}](assets/{debug_name})",
                 "",

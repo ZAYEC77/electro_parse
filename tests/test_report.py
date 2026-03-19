@@ -20,6 +20,7 @@ class ReportTests(unittest.TestCase):
 
             content = report_path.read_text(encoding="utf-8")
             self.assertIn("# Electro Parse Report", content)
+            self.assertIn("## [photo_2026-02-12.jpeg](../images/photo_2026-02-12.jpeg)", content)
             self.assertIn("![photo_2026-02-12.jpeg](assets/photo_2026-02-12.debug.jpeg)", content)
             self.assertIn("![photo_2026-03-19.jpeg](assets/photo_2026-03-19.debug.jpeg)", content)
             self.assertIn("<details>", content)

@@ -85,6 +85,26 @@ python generate_report.py
 python generate_report.py --images images --report report --rows 12 --columns 24 --max-colors 10
 ```
 
+## Як додавати нові зображення
+
+1. Покладіть новий файл у директорію `images/`.
+2. Використовуйте формат `.jpg`, `.jpeg` або `.png`.
+3. Не додавайте в `images/` debug-файли з шаблоном імені `*.debug.*`, бо генератор звіту їх ігнорує.
+4. Бажано називати файли послідовно, наприклад `photo_2026-03-20.jpeg`, щоб їх було легко знаходити в історії та у звіті.
+5. Після додавання запустіть:
+
+```bash
+python generate_report.py
+```
+
+Це перебудує `report/report.md` і заново створить `report/assets/` з debug-зображеннями для всіх файлів у `images/`.
+
+Для швидкої перевірки одного нового файлу зручно окремо запустити:
+
+```bash
+python electro_parse.py "images/NEW_FILE.jpeg" --debug
+```
+
 ## Тести
 
 ```bash

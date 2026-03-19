@@ -2,7 +2,7 @@
 
 Source directory: `images`
 
-## photo_2025-12-11.jpeg
+## [photo_2025-12-11.jpeg](../images/photo_2025-12-11.jpeg)
 
 ![photo_2025-12-11.jpeg](assets/photo_2025-12-11.debug.jpeg)
 
@@ -63,7 +63,7 @@ Source directory: `images`
 ```
 </details>
 
-## photo_2025-12-26.jpeg
+## [photo_2025-12-26.jpeg](../images/photo_2025-12-26.jpeg)
 
 ![photo_2025-12-26.jpeg](assets/photo_2025-12-26.debug.jpeg)
 
@@ -124,7 +124,7 @@ Source directory: `images`
 ```
 </details>
 
-## photo_2026-01-10.jpeg
+## [photo_2026-01-10.jpeg](../images/photo_2026-01-10.jpeg)
 
 ![photo_2026-01-10.jpeg](assets/photo_2026-01-10.debug.jpeg)
 
@@ -185,7 +185,7 @@ Source directory: `images`
 ```
 </details>
 
-## photo_2026-02-08.jpeg
+## [photo_2026-02-08.jpeg](../images/photo_2026-02-08.jpeg)
 
 ![photo_2026-02-08.jpeg](assets/photo_2026-02-08.debug.jpeg)
 
@@ -246,7 +246,7 @@ Source directory: `images`
 ```
 </details>
 
-## photo_2026-02-09.jpeg
+## [photo_2026-02-09.jpeg](../images/photo_2026-02-09.jpeg)
 
 ![photo_2026-02-09.jpeg](assets/photo_2026-02-09.debug.jpeg)
 
@@ -307,7 +307,7 @@ Source directory: `images`
 ```
 </details>
 
-## photo_2026-02-12.jpeg
+## [photo_2026-02-12.jpeg](../images/photo_2026-02-12.jpeg)
 
 ![photo_2026-02-12.jpeg](assets/photo_2026-02-12.debug.jpeg)
 
@@ -368,7 +368,7 @@ Source directory: `images`
 ```
 </details>
 
-## photo_2026-02-26.jpeg
+## [photo_2026-02-26.jpeg](../images/photo_2026-02-26.jpeg)
 
 ![photo_2026-02-26.jpeg](assets/photo_2026-02-26.debug.jpeg)
 
@@ -429,7 +429,7 @@ Source directory: `images`
 ```
 </details>
 
-## photo_2026-03-19.jpeg
+## [photo_2026-03-19.jpeg](../images/photo_2026-03-19.jpeg)
 
 ![photo_2026-03-19.jpeg](assets/photo_2026-03-19.debug.jpeg)
 
