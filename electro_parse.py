@@ -84,6 +84,8 @@ def _infer_geometry(
 ) -> GridGeometry:
     try:
         components = _extract_filled_components(quantized_image)
+        if len(components) < 2:
+            raise ValueError("Not enough filled components for reliable geometry inference.")
         base_width = _infer_step([width for _, _, width, _, _ in components], 20, 60)
         base_height = _infer_step([height for _, _, _, height, _ in components], 20, 60)
 
@@ -278,14 +280,47 @@ def _sample_cell_colors(image: np.ndarray, geometry: GridGeometry) -> list[list[
 def _draw_debug_overlay(
     image: np.ndarray,
     geometry: GridGeometry,
+    cell_colors: list[list[np.ndarray]],
+    off_colors: set[tuple[int, int, int]],
+    maybe_colors: set[tuple[int, int, int]],
     output_path: Path,
 ) -> None:
     debug_image = image.copy()
+    overlay = debug_image.copy()
     left = geometry.matrix_left
     top = geometry.matrix_top
     right = left + geometry.column_count * geometry.cell_width
     bottom = top + geometry.row_count * geometry.cell_height
 
+    status_colors = {
+        "off": (40, 40, 220),
+        "maybe_off": (0, 200, 255),
+        "on": (60, 180, 75),
+    }
+
+    for row in range(geometry.row_count):
+        for column in range(geometry.column_count):
+            color = tuple(int(channel) for channel in np.uint8(cell_colors[row][column]).tolist())
+            if color in off_colors:
+                status = "off"
+            elif color in maybe_colors:
+                status = "maybe_off"
+            else:
+                status = "on"
+
+            cell_left = left + column * geometry.cell_width
+            cell_right = left + (column + 1) * geometry.cell_width
+            cell_top = top + row * geometry.cell_height
+            cell_bottom = top + (row + 1) * geometry.cell_height
+            cv2.rectangle(
+                overlay,
+                (cell_left, cell_top),
+                (cell_right, cell_bottom),
+                status_colors[status],
+                -1,
+            )
+
+    cv2.addWeighted(overlay, 0.25, debug_image, 0.75, 0, debug_image)
     cv2.rectangle(debug_image, (left, top), (right, bottom), (0, 0, 255), 2)
 
     for column in range(geometry.column_count + 1):
@@ -359,10 +394,10 @@ def parse_schedule_image(
 
     quantized = quantize_image(image, max_colors=max_colors)
     geometry = _infer_geometry(image, quantized, row_count=row_count, column_count=column_count)
-    if debug_output is not None:
-        _draw_debug_overlay(image, geometry, Path(debug_output))
     cell_colors = _sample_cell_colors(quantized, geometry)
     off_colors, maybe_colors = _classify_palette(cell_colors)
+    if debug_output is not None:
+        _draw_debug_overlay(image, geometry, cell_colors, off_colors, maybe_colors, Path(debug_output))
 
     result: dict[str, dict[str, list[str]]] = {}
     for row_index, label in enumerate(_row_labels(row_count)):
