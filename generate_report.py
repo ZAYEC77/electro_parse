@@ -11,6 +11,26 @@ from electro_parse import parse_schedule_image
 SUPPORTED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
 
 
+def _format_report_json(value: object, indent: int = 0) -> str:
+    space = " " * indent
+    next_space = " " * (indent + 2)
+
+    if isinstance(value, dict):
+        if not value:
+            return "{}"
+        items = []
+        for key, item in value.items():
+            formatted_item = _format_report_json(item, indent + 2)
+            items.append(f'{next_space}{json.dumps(key, ensure_ascii=False)}: {formatted_item}')
+        return "{\n" + ",\n".join(items) + f"\n{space}" + "}"
+
+    if isinstance(value, list):
+        rendered = ", ".join(json.dumps(item, ensure_ascii=False) for item in value)
+        return f"[{rendered}]"
+
+    return json.dumps(value, ensure_ascii=False)
+
+
 def _iter_source_images(image_dir: Path) -> list[Path]:
     return sorted(
         path
@@ -68,7 +88,7 @@ def generate_report(
                 f"![{image_path.name}](assets/{debug_name})",
                 "",
                 "```json",
-                json.dumps(parsed, ensure_ascii=False, indent=2),
+                _format_report_json(parsed),
                 "```",
                 "",
             ]
