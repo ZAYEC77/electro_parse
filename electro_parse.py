@@ -257,16 +257,20 @@ def _sample_cell_colors(image: np.ndarray, geometry: GridGeometry) -> list[list[
     cell_colors: list[list[np.ndarray]] = []
     x_padding = max(2, geometry.cell_width // 4)
     y_padding = max(2, geometry.cell_height // 4)
+    image_height, image_width = image.shape[:2]
 
     for row in range(geometry.row_count):
         row_colors: list[np.ndarray] = []
         for column in range(geometry.column_count):
-            left = geometry.matrix_left + column * geometry.cell_width + x_padding
-            right = geometry.matrix_left + (column + 1) * geometry.cell_width - x_padding
-            top = geometry.matrix_top + row * geometry.cell_height + y_padding
-            bottom = geometry.matrix_top + (row + 1) * geometry.cell_height - y_padding
+            left = max(0, geometry.matrix_left + column * geometry.cell_width + x_padding)
+            right = min(image_width, geometry.matrix_left + (column + 1) * geometry.cell_width - x_padding)
+            top = max(0, geometry.matrix_top + row * geometry.cell_height + y_padding)
+            bottom = min(image_height, geometry.matrix_top + (row + 1) * geometry.cell_height - y_padding)
             patch = image[top:bottom, left:right]
-            row_colors.append(np.median(patch.reshape(-1, 3), axis=0))
+            if patch.size == 0:
+                row_colors.append(np.array([255.0, 255.0, 255.0]))
+            else:
+                row_colors.append(np.median(patch.reshape(-1, 3), axis=0))
         cell_colors.append(row_colors)
     return cell_colors
 
