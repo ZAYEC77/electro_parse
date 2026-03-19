@@ -87,9 +87,13 @@ def generate_report(
                 "",
                 f"![{image_path.name}](assets/{debug_name})",
                 "",
+                "<details>",
+                "<summary>Показати розпізнані дані</summary>",
+                "",
                 "```json",
                 _format_report_json(parsed),
                 "```",
+                "</details>",
                 "",
             ]
         )

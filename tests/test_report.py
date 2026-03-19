@@ -22,6 +22,8 @@ class ReportTests(unittest.TestCase):
             self.assertIn("# Electro Parse Report", content)
             self.assertIn("![photo_2026-02-12.jpeg](assets/photo_2026-02-12.debug.jpeg)", content)
             self.assertIn("![photo_2026-03-19.jpeg](assets/photo_2026-03-19.debug.jpeg)", content)
+            self.assertIn("<details>", content)
+            self.assertIn("<summary>Показати розпізнані дані</summary>", content)
             self.assertIn('"off": ["08:00", "09:00", "10:00"', content)
 
             asset_path = report_dir / "assets" / "photo_2026-02-12.debug.jpeg"
