@@ -10,7 +10,7 @@ IMAGES = ROOT / "images"
 
 class ParserTests(unittest.TestCase):
     def test_parses_first_schedule(self) -> None:
-        parsed = parse_schedule_image(IMAGES / "photo_2026-03-19 23.56.59.jpeg")
+        parsed = parse_schedule_image(IMAGES / "photo_2026-02-26.jpeg")
         self.assertEqual(
             parsed,
             {
@@ -30,7 +30,7 @@ class ParserTests(unittest.TestCase):
         )
 
     def test_parses_second_schedule(self) -> None:
-        parsed = parse_schedule_image(IMAGES / "photo_2026-03-19 23.57.02.jpeg")
+        parsed = parse_schedule_image(IMAGES / "photo_2026-03-19.jpeg")
         self.assertEqual(
             parsed,
             {
