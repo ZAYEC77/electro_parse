@@ -278,6 +278,57 @@ def _sample_cell_colors(image: np.ndarray, geometry: GridGeometry) -> list[list[
     return cell_colors
 
 
+def _snapped_grid_lines(image: np.ndarray, geometry: GridGeometry) -> tuple[list[int], list[int]]:
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    inverted = 255 - gray
+    thresholded = cv2.adaptiveThreshold(
+        inverted,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        31,
+        -5,
+    )
+
+    image_height, image_width = gray.shape
+    vertical = cv2.morphologyEx(
+        thresholded,
+        cv2.MORPH_OPEN,
+        cv2.getStructuringElement(cv2.MORPH_RECT, (1, max(10, image_height // 25))),
+    )
+    horizontal = cv2.morphologyEx(
+        thresholded,
+        cv2.MORPH_OPEN,
+        cv2.getStructuringElement(cv2.MORPH_RECT, (max(10, image_width // 25), 1)),
+    )
+
+    vertical_score = (vertical > 0).sum(axis=0)
+    horizontal_score = (horizontal > 0).sum(axis=1)
+    x_window = max(3, geometry.cell_width // 3)
+    y_window = max(3, geometry.cell_height // 3)
+
+    def snap(score: np.ndarray, expected: int, window: int) -> int:
+        left = max(0, expected - window)
+        right = min(len(score), expected + window + 1)
+        if right <= left:
+            return expected
+        segment = score[left:right]
+        best_offset = int(np.argmax(segment))
+        if int(segment[best_offset]) <= 0:
+            return expected
+        return left + best_offset
+
+    x_lines = [
+        snap(vertical_score, geometry.matrix_left + index * geometry.cell_width, x_window)
+        for index in range(geometry.column_count + 1)
+    ]
+    y_lines = [
+        snap(horizontal_score, geometry.matrix_top + index * geometry.cell_height, y_window)
+        for index in range(geometry.row_count + 1)
+    ]
+    return x_lines, y_lines
+
+
 def _draw_debug_overlay(
     image: np.ndarray,
     geometry: GridGeometry,
@@ -285,10 +336,11 @@ def _draw_debug_overlay(
     output_path: Path,
 ) -> None:
     debug_image = image.copy()
-    left = geometry.matrix_left
-    top = geometry.matrix_top
-    right = left + geometry.column_count * geometry.cell_width
-    bottom = top + geometry.row_count * geometry.cell_height
+    x_lines, y_lines = _snapped_grid_lines(image, geometry)
+    left = x_lines[0]
+    top = y_lines[0]
+    right = x_lines[-1]
+    bottom = y_lines[-1]
 
     point_colors = {
         "off": (0, 0, 255),
@@ -297,22 +349,24 @@ def _draw_debug_overlay(
     }
     cv2.rectangle(debug_image, (left, top), (right, bottom), (0, 0, 255), 2)
 
-    for column in range(geometry.column_count + 1):
-        x = left + column * geometry.cell_width
+    for x in x_lines:
         cv2.line(debug_image, (x, top), (x, bottom), (0, 180, 255), 1)
 
-    for row in range(geometry.row_count + 1):
-        y = top + row * geometry.cell_height
+    for y in y_lines:
         cv2.line(debug_image, (left, y), (right, y), (0, 180, 255), 1)
 
-    x_padding = max(2, geometry.cell_width // 4)
-    y_padding = max(2, geometry.cell_height // 4)
     for row in range(geometry.row_count):
         for column in range(geometry.column_count):
-            sample_left = left + column * geometry.cell_width + x_padding
-            sample_right = left + (column + 1) * geometry.cell_width - x_padding
-            sample_top = top + row * geometry.cell_height + y_padding
-            sample_bottom = top + (row + 1) * geometry.cell_height - y_padding
+            cell_left = x_lines[column]
+            cell_right = x_lines[column + 1]
+            cell_top = y_lines[row]
+            cell_bottom = y_lines[row + 1]
+            x_padding = max(2, (cell_right - cell_left) // 4)
+            y_padding = max(2, (cell_bottom - cell_top) // 4)
+            sample_left = cell_left + x_padding
+            sample_right = cell_right - x_padding
+            sample_top = cell_top + y_padding
+            sample_bottom = cell_bottom - y_padding
             cx = (sample_left + sample_right) // 2
             cy = (sample_top + sample_bottom) // 2
             status = statuses[row][column]
