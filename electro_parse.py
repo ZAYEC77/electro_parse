@@ -83,6 +83,12 @@ def _infer_geometry(
     row_count: int,
     column_count: int,
 ) -> GridGeometry:
+    grid_error: ValueError | None = None
+    try:
+        return _infer_geometry_from_grid(original_image, row_count=row_count, column_count=column_count)
+    except ValueError as error:
+        grid_error = error
+
     try:
         components = _extract_filled_components(quantized_image)
         if len(components) < 2:
@@ -156,7 +162,9 @@ def _infer_geometry(
     except ValueError:
         pass
 
-    return _infer_geometry_from_grid(original_image, row_count=row_count, column_count=column_count)
+    if grid_error is not None:
+        raise grid_error
+    raise ValueError("Failed to infer the schedule matrix geometry.")
 
 
 def _group_centers(indices: np.ndarray) -> list[int]:

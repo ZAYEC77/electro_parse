@@ -352,6 +352,26 @@ class ParserTests(unittest.TestCase):
             },
         )
 
+    def test_parses_schedule_with_empty_leading_rows(self) -> None:
+        parsed = parse_schedule_image(IMAGES / "photo_2026-06-30.jpeg")
+        self.assertEqual(
+            parsed,
+            {
+                "1.1": {"off": [], "maybe_off": []},
+                "1.2": {"off": [], "maybe_off": []},
+                "2.1": {"off": [], "maybe_off": []},
+                "2.2": {"off": [], "maybe_off": []},
+                "3.1": {"off": ["18:00", "19:00"], "maybe_off": []},
+                "3.2": {"off": ["17:00", "18:00", "19:00"], "maybe_off": []},
+                "4.1": {"off": ["20:00", "21:00"], "maybe_off": []},
+                "4.2": {"off": [], "maybe_off": []},
+                "5.1": {"off": [], "maybe_off": []},
+                "5.2": {"off": [], "maybe_off": []},
+                "6.1": {"off": [], "maybe_off": []},
+                "6.2": {"off": [], "maybe_off": []},
+            },
+        )
+
     def test_writes_debug_overlay(self) -> None:
         debug_path = ROOT / "images" / "photo_2026-03-19.debug.jpeg"
         try:
