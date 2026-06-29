@@ -489,3 +489,64 @@ Source directory: `images`
 }
 ```
 </details>
+
+## [photo_2026-06-30.jpeg](../images/photo_2026-06-30.jpeg)
+
+![photo_2026-06-30.jpeg](assets/photo_2026-06-30.debug.jpeg)
+
+<details>
+<summary>Показати розпізнані дані</summary>
+
+```json
+{
+  "1.1": {
+    "off": [],
+    "maybe_off": []
+  },
+  "1.2": {
+    "off": [],
+    "maybe_off": []
+  },
+  "2.1": {
+    "off": [],
+    "maybe_off": []
+  },
+  "2.2": {
+    "off": [],
+    "maybe_off": []
+  },
+  "3.1": {
+    "off": ["18:00", "19:00"],
+    "maybe_off": []
+  },
+  "3.2": {
+    "off": ["17:00", "18:00", "19:00"],
+    "maybe_off": []
+  },
+  "4.1": {
+    "off": ["20:00", "21:00"],
+    "maybe_off": []
+  },
+  "4.2": {
+    "off": [],
+    "maybe_off": []
+  },
+  "5.1": {
+    "off": [],
+    "maybe_off": []
+  },
+  "5.2": {
+    "off": [],
+    "maybe_off": []
+  },
+  "6.1": {
+    "off": [],
+    "maybe_off": []
+  },
+  "6.2": {
+    "off": [],
+    "maybe_off": []
+  }
+}
+```
+</details>
