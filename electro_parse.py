@@ -20,12 +20,31 @@ class GridGeometry:
 
 
 def quantize_image(image: np.ndarray, max_colors: int = 10) -> np.ndarray:
+    """
+    Швидка K-Means квантизація кольорів (використовує підвибірку для великих зображень).
+    Збережена для зворотної сумісності зовнішнього API.
+    """
     cv2.setRNGSeed(0)
+    h, w = image.shape[:2]
+    total_px = h * w
+    if total_px > 25000:
+        step = max(2, int(np.sqrt(total_px / 15000)))
+        sample = image[::step, ::step].reshape((-1, 3)).astype(np.float32)
+        k = min(max_colors, len(sample))
+        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 15, 1.0)
+        _, _, centers = cv2.kmeans(sample, k, None, criteria, 3, cv2.KMEANS_PP_CENTERS)
+        palette = np.uint8(centers)
+        pixels = image.reshape((-1, 1, 3)).astype(np.int16)
+        dists = np.sum((pixels - palette.astype(np.int16)) ** 2, axis=2)
+        nearest = np.argmin(dists, axis=1)
+        return palette[nearest].reshape(image.shape)
+
     pixels = image.reshape((-1, 3)).astype(np.float32)
+    k = min(max_colors, len(pixels))
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 20, 1.0)
     _, labels, centers = cv2.kmeans(
         pixels,
-        max_colors,
+        k,
         None,
         criteria,
         5,
@@ -33,6 +52,32 @@ def quantize_image(image: np.ndarray, max_colors: int = 10) -> np.ndarray:
     )
     palette = np.uint8(centers)
     return palette[labels.flatten()].reshape(image.shape)
+
+
+def _extract_grid_masks(original_image: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    gray = cv2.cvtColor(original_image, cv2.COLOR_BGR2GRAY)
+    inverted = 255 - gray
+    thresholded = cv2.adaptiveThreshold(
+        inverted,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        31,
+        -5,
+    )
+
+    height, width = gray.shape
+    vertical = cv2.morphologyEx(
+        thresholded,
+        cv2.MORPH_OPEN,
+        cv2.getStructuringElement(cv2.MORPH_RECT, (1, max(10, height // 25))),
+    )
+    horizontal = cv2.morphologyEx(
+        thresholded,
+        cv2.MORPH_OPEN,
+        cv2.getStructuringElement(cv2.MORPH_RECT, (max(10, width // 25), 1)),
+    )
+    return vertical, horizontal
 
 
 def _extract_filled_components(image: np.ndarray) -> list[tuple[int, int, int, int, int]]:
@@ -79,18 +124,25 @@ def _infer_step(values: list[int], minimum: int, maximum: int) -> int:
 
 def _infer_geometry(
     original_image: np.ndarray,
-    quantized_image: np.ndarray,
+    quantized_image: np.ndarray | None,
     row_count: int,
     column_count: int,
+    grid_masks: tuple[np.ndarray, np.ndarray] | None = None,
 ) -> GridGeometry:
     grid_error: ValueError | None = None
     try:
-        return _infer_geometry_from_grid(original_image, row_count=row_count, column_count=column_count)
+        return _infer_geometry_from_grid(
+            original_image,
+            row_count=row_count,
+            column_count=column_count,
+            grid_masks=grid_masks,
+        )
     except ValueError as error:
         grid_error = error
 
     try:
-        components = _extract_filled_components(quantized_image)
+        src_img = quantized_image if quantized_image is not None else original_image
+        components = _extract_filled_components(src_img)
         if len(components) < 2:
             raise ValueError("Not enough filled components for reliable geometry inference.")
         base_width = _infer_step([width for _, _, width, _, _ in components], 20, 60)
@@ -102,6 +154,7 @@ def _infer_geometry(
         max_y = max(y + height for _, y, _, height, _ in components)
 
         gray = cv2.cvtColor(original_image, cv2.COLOR_BGR2GRAY)
+        inv_gray = 255.0 - gray.astype(np.float64)
         best_geometry: tuple[float, int, int, int, int] | None = None
 
         for cell_width in range(max(20, base_width - 2), min(60, base_width + 2) + 1):
@@ -110,12 +163,18 @@ def _infer_geometry(
             if search_from > search_to:
                 continue
 
+            pad_x = max(2, cell_width // 10)
+            span_w = cell_width - 2 * pad_x
+            if span_w <= 0:
+                continue
+
             for cell_height in range(max(20, base_height - 1), min(60, base_height + 1) + 1):
-                top_candidates = []
-                for offset in range(cell_height):
-                    for top in range(offset, min_y + 1, cell_height):
-                        if top + row_count * cell_height >= max_y:
-                            top_candidates.append(top)
+                top_candidates = [
+                    top
+                    for offset in range(cell_height)
+                    for top in range(offset, min_y + 1, cell_height)
+                    if top + row_count * cell_height >= max_y
+                ]
                 if not top_candidates:
                     continue
 
@@ -123,28 +182,19 @@ def _infer_geometry(
                 header_top = max(0, int(round(matrix_top - 3.0 * cell_height)))
                 header_bottom = max(header_top + 5, int(round(matrix_top - 0.3 * cell_height)))
 
-                best_left_for_shape: tuple[float, int] | None = None
-                for matrix_left in range(search_from, search_to + 1):
-                    values = []
-                    for column in range(column_count):
-                        left = matrix_left + column * cell_width + max(2, cell_width // 10)
-                        right = matrix_left + (column + 1) * cell_width - max(2, cell_width // 10)
-                        if right <= left:
-                            values = []
-                            break
-                        patch = gray[header_top:header_bottom, left:right]
-                        values.append(float((255 - patch).mean()))
-                    if not values:
-                        continue
-                    scores = np.array(values)
-                    score = float(scores.mean() - 2.0 * scores.std())
-                    if best_left_for_shape is None or score > best_left_for_shape[0]:
-                        best_left_for_shape = (score, matrix_left)
+                col_profile = inv_gray[header_top:header_bottom, :].mean(axis=0)
+                prefix = np.empty(len(col_profile) + 1, dtype=np.float64)
+                prefix[0] = 0.0
+                np.cumsum(col_profile, out=prefix[1:])
 
-                if best_left_for_shape is None:
-                    continue
+                lefts = np.arange(search_from, search_to + 1)[:, None] + np.arange(column_count)[None, :] * cell_width + pad_x
+                rights = lefts + span_w
+                means = (prefix[rights] - prefix[lefts]) / span_w
+                row_scores = means.mean(axis=1) - 2.0 * means.std(axis=1)
+                best_idx = int(np.argmax(row_scores))
+                score = float(row_scores[best_idx])
+                matrix_left = int(search_from + best_idx)
 
-                score, matrix_left = best_left_for_shape
                 candidate = (score, cell_width, cell_height, matrix_left, matrix_top)
                 if best_geometry is None or score > best_geometry[0]:
                     best_geometry = candidate
@@ -209,29 +259,12 @@ def _infer_geometry_from_grid(
     *,
     row_count: int,
     column_count: int,
+    grid_masks: tuple[np.ndarray, np.ndarray] | None = None,
 ) -> GridGeometry:
-    gray = cv2.cvtColor(original_image, cv2.COLOR_BGR2GRAY)
-    inverted = 255 - gray
-    thresholded = cv2.adaptiveThreshold(
-        inverted,
-        255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY,
-        31,
-        -5,
-    )
-
-    height, width = gray.shape
-    vertical = cv2.morphologyEx(
-        thresholded,
-        cv2.MORPH_OPEN,
-        cv2.getStructuringElement(cv2.MORPH_RECT, (1, max(10, height // 25))),
-    )
-    horizontal = cv2.morphologyEx(
-        thresholded,
-        cv2.MORPH_OPEN,
-        cv2.getStructuringElement(cv2.MORPH_RECT, (max(10, width // 25), 1)),
-    )
+    if grid_masks is None:
+        vertical, horizontal = _extract_grid_masks(original_image)
+    else:
+        vertical, horizontal = grid_masks
     grid = cv2.add(vertical, horizontal)
 
     contours, _ = cv2.findContours(grid, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -286,29 +319,15 @@ def _sample_cell_colors(image: np.ndarray, geometry: GridGeometry) -> list[list[
     return cell_colors
 
 
-def _snapped_grid_lines(image: np.ndarray, geometry: GridGeometry) -> tuple[list[int], list[int]]:
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    inverted = 255 - gray
-    thresholded = cv2.adaptiveThreshold(
-        inverted,
-        255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY,
-        31,
-        -5,
-    )
-
-    image_height, image_width = gray.shape
-    vertical = cv2.morphologyEx(
-        thresholded,
-        cv2.MORPH_OPEN,
-        cv2.getStructuringElement(cv2.MORPH_RECT, (1, max(10, image_height // 25))),
-    )
-    horizontal = cv2.morphologyEx(
-        thresholded,
-        cv2.MORPH_OPEN,
-        cv2.getStructuringElement(cv2.MORPH_RECT, (max(10, image_width // 25), 1)),
-    )
+def _snapped_grid_lines(
+    image: np.ndarray,
+    geometry: GridGeometry,
+    grid_masks: tuple[np.ndarray, np.ndarray] | None = None,
+) -> tuple[list[int], list[int]]:
+    if grid_masks is None:
+        vertical, horizontal = _extract_grid_masks(image)
+    else:
+        vertical, horizontal = grid_masks
 
     vertical_score = (vertical > 0).sum(axis=0)
     horizontal_score = (horizontal > 0).sum(axis=1)
@@ -342,9 +361,10 @@ def _draw_debug_overlay(
     geometry: GridGeometry,
     statuses: list[list[str]],
     output_path: Path,
+    grid_masks: tuple[np.ndarray, np.ndarray] | None = None,
 ) -> None:
     debug_image = image.copy()
-    x_lines, y_lines = _snapped_grid_lines(image, geometry)
+    x_lines, y_lines = _snapped_grid_lines(image, geometry, grid_masks=grid_masks)
     left = x_lines[0]
     top = y_lines[0]
     right = x_lines[-1]
@@ -408,8 +428,16 @@ def _classify_palette(cell_colors: list[list[np.ndarray]]) -> tuple[set[tuple[in
         reverse=True,
     )
 
-    off_colors = {tuple(int(channel) for channel in unique_colors[ordered[0]])}
-    maybe_colors = {tuple(int(channel) for channel in unique_colors[index]) for index in ordered[1:]}
+    primary_off = unique_colors[ordered[0]].astype(np.float32)
+    off_colors: set[tuple[int, int, int]] = set()
+    maybe_colors: set[tuple[int, int, int]] = set()
+    for index in ordered:
+        c_tuple = tuple(int(channel) for channel in unique_colors[index])
+        dist_to_off = float(np.linalg.norm(unique_colors[index].astype(np.float32) - primary_off))
+        if dist_to_off < 25.0:
+            off_colors.add(c_tuple)
+        else:
+            maybe_colors.add(c_tuple)
     return off_colors, maybe_colors
 
 
@@ -449,13 +477,19 @@ def parse_schedule_image(
     if image is None:
         raise FileNotFoundError(f"Failed to read image: {image_path}")
 
-    quantized = quantize_image(image, max_colors=max_colors)
-    geometry = _infer_geometry(image, quantized, row_count=row_count, column_count=column_count)
-    cell_colors = _sample_cell_colors(quantized, geometry)
+    grid_masks = _extract_grid_masks(image)
+    geometry = _infer_geometry(
+        image,
+        None,
+        row_count=row_count,
+        column_count=column_count,
+        grid_masks=grid_masks,
+    )
+    cell_colors = _sample_cell_colors(image, geometry)
     off_colors, maybe_colors = _classify_palette(cell_colors)
     statuses = _classify_cell_statuses(cell_colors, off_colors, maybe_colors)
     if debug_output is not None:
-        _draw_debug_overlay(image, geometry, statuses, Path(debug_output))
+        _draw_debug_overlay(image, geometry, statuses, Path(debug_output), grid_masks=grid_masks)
 
     result: dict[str, dict[str, list[str]]] = {}
     for row_index, label in enumerate(_row_labels(row_count)):
